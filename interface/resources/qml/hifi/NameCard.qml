@@ -595,6 +595,7 @@ Item {
     }
 
     // Function body by Howard Stearns 2017-01-08
+    // Updated body by Daniela Fontes 2017-12-14
     function goToUserInDomain(avatarUuid) {
         var avatar = AvatarList.getAvatar(avatarUuid);
         if (!avatar) {
@@ -606,9 +607,9 @@ Item {
         // FIXME: it would be nice if this used the same teleport steps and smoothing as in the teleport.js script.
         // Note, however, that this script allows teleporting to a person in the air, while teleport.js is going to a grounded target.
         // Position avatar 2 metres from the target in the direction that target avatar was facing.
-        MyAvatar.position = Vec3.sum(avatar.position, Vec3.multiplyQbyV(avatar.orientation, {x: 0, y: 0, z: -2}));
-        
+        MyAvatar.position = Vec3.sum(avatar.position, Vec3.multiply(2.0, Quat.getFront(avatar.orientation)));
+
         // Rotate avatar on Y axis to face target avatar and cancel out any inherited roll and pitch.
-        MyAvatar.orientation = Quat.cancelOutRollAndPitch(Quat.multiply(avatar.orientation, {y: 1}));
+        MyAvatar.orientation = Quat.cancelOutRollAndPitch(Quat.multiply(avatar.orientation, Quat.fromPitchYawRollDegrees(0, 180, 0)));
     }
 }
