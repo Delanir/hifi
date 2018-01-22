@@ -446,9 +446,27 @@ void MyAvatar::update(float deltaTime) {
     glm::vec3 halfBoundingBoxDimensions(_characterController.getCapsuleRadius(), _characterController.getCapsuleHalfHeight(), _characterController.getCapsuleRadius());
     // This might not be right! Isn't the capsule local offset in avatar space? -HRS 5/26/17
     halfBoundingBoxDimensions += _characterController.getCapsuleLocalOffset();
+    
+    // Define minimum bounding box size for positional audio
+
+    // Define the minimum bubble size
+    static const glm::vec3 minBubbleSize = AvatarData::getSensorToWorldScale() * glm::vec3(0.3f, 1.3f, 0.3f);
+    // Define the scale of the box for the current node
+    
+    glm::vec3 nodeBoxScale = (getWorldPosition() - AvatarData::getGlobalBoundingBoxCorner()) * 2.0f * AvatarData::getSensorToWorldScale();
+    // Set up the bounding box for the current node
+    AABox nodeBox(AvatarData::getGlobalBoundingBoxCorner(), nodeBoxScale);
+    // Clamp the size of the bounding box to a minimum scale
+    if (glm::any(glm::lessThan(nodeBoxScale, minBubbleSize))) {
+        nodeBox.setScaleStayCentered(minBubbleSize);
+    }
+ 
+    // Quadruple the scale of both bounding boxes
+    nodeBox.embiggen(4.0f);
+
     QMetaObject::invokeMethod(audio.data(), "setAvatarBoundingBoxParameters",
-        Q_ARG(glm::vec3, (getWorldPosition() - halfBoundingBoxDimensions)),
-        Q_ARG(glm::vec3, (halfBoundingBoxDimensions*2.0f)));
+        Q_ARG(glm::vec3, (nodeBox.getCorner())),
+        Q_ARG(glm::vec3, (nodeBox.getScale())));
 
     if (getIdentityDataChanged()) {
         sendIdentityPacket();

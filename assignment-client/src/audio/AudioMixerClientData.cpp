@@ -613,20 +613,11 @@ AudioMixerClientData::IgnoreZone& AudioMixerClientData::IgnoreZoneMemo::get(unsi
     // check for a memoized zone
     if (frame != _frame.load(std::memory_order_acquire)) {
         AvatarAudioStream* stream = _data.getAvatarAudioStream();
-
+        
         // get the initial dimensions from the stream
+        // TODO : ask best course of action in case stream is undefined
         glm::vec3 corner = stream ? stream->getAvatarBoundingBoxCorner() : glm::vec3(0);
         glm::vec3 scale = stream ? stream->getAvatarBoundingBoxScale() : glm::vec3(0);
-
-        // enforce a minimum scale
-        static const glm::vec3 MIN_IGNORE_BOX_SCALE = glm::vec3(0.3f, 1.3f, 0.3f);
-        if (glm::any(glm::lessThan(scale, MIN_IGNORE_BOX_SCALE))) {
-            scale = MIN_IGNORE_BOX_SCALE;
-        }
-
-        // quadruple the scale (this is arbitrary number chosen for comfort)
-        const float IGNORE_BOX_SCALE_FACTOR = 4.0f;
-        scale *= IGNORE_BOX_SCALE_FACTOR;
 
         // create the box (we use a box for the zone for convenience)
         AABox box(corner, scale);
