@@ -8,7 +8,7 @@
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 
-/* global Tablet, Entities, Vec3, Graphics, Script, Quat, Assets, HMD, SPACE_LOCAL */
+/* global Tablet, Entities, Vec3, Graphics, Script, Quat, Assets, HMD, SPACE_LOCAL, Hand */
 
 (function () {
     // Utilities
@@ -24,7 +24,8 @@
         APP_URL = CONTENT_PATH + "/html/polylineList.html";
     
     var _shouldRestoreTablet = false,
-        isWrapping = false;
+        isWrapping = false,
+        wantDebug = false;
 
     function getDistanceToCamera(position) {
         var cameraPosition = Camera.getPosition();
@@ -50,9 +51,6 @@
         var SCALE_CUBE_CAMERA_DISTANCE_MULTIPLE = 0.015;
 
         var ROTATE_RING_CAMERA_DISTANCE_MULTIPLE = 0.15;
-
-        
-
         var handlePropertiesScaleCubes = {
             size: 0.01,
             color: COLOR_SCALE_CUBE,
@@ -509,7 +507,7 @@
             that._update(true);
         };
 
-        that.clearBaseOverlays  = function() {
+        that.clearBaseOverlays = function() {
             that.setBaseOverlaysVisible(false);
             that.allEntities = [];
             that.updateBaseUI(true);
@@ -593,7 +591,9 @@
                 try {
                     listeners[j](selectionUpdated === true);
                 } catch (e) {
-                    print("ERROR: entitySelectionTool.update got exception: " + JSON.stringify(e));
+                    if (wantDebug) {
+                        print("ERROR: entitySelectionTool.update got exception: " + JSON.stringify(e));
+                    }
                 }
             }
         };
@@ -664,15 +664,13 @@
 
     var selectionManager = SelectionManager;
 
-    
-
     // web
     var MIN_FILENAME_LENGTH = 4;
     var searchRadius = 10;
     var filename = "wrapObject";
     var FILE_NAME_PREFIX = "wrapObject";
     var WRAPKEY = "wrap/filenumber";
-    var isUsingTextures = false;
+    var isUsingTextures = true;
     var textureCallbackCount = 0;
     var totalNumberOfTextures = 0;
     var objInfo;
@@ -686,7 +684,7 @@
         var found = [];
         leftHandController.update();
         rightHandController.update();
-        if(leftHandController.gripClicked()) {
+        if (leftHandController.gripClicked()) {
             leftHandController.setGripClickedHandled();
             found = Entities.findEntitiesByType("PolyLine", MyAvatar.getLeftPalmPosition(), CONTROLLER_SEARCH_RADIUS);
             
@@ -710,7 +708,7 @@
             }, 300);
 
         }
-        if(rightHandController.gripClicked()) {
+        if (rightHandController.gripClicked()) {
             rightHandController.setGripClickedHandled();
         
             found = Entities.findEntitiesByType("PolyLine", MyAvatar.getRightPalmPosition(), CONTROLLER_SEARCH_RADIUS);
@@ -734,7 +732,7 @@
                 UIOverlaysRight = [];
             }, 300);
         }
-    }
+    };
     
 
     var addEntity = function(entityID, toggleSelection) {
@@ -786,14 +784,12 @@
         for (i = 0; i < selectionManager.selections.length; i++) {
             removedIDS.push(selectionManager.selections[i]);
         }
-        print("PRE Polylines length. " + selectionManager.selections.length);
         for (i = 0; i < removedIDS.length; i++) {
             var idx = polylines.indexOf(removedIDS[i]);
             if (idx >= 0) {
                 polylines.splice(idx, 1); 
             }
         }
-        print("Polylines length. " + polylines.length);
         selectionManager.removeEntities(removedIDS);
         selectionManager.allEntities = polylines;
         selectionManager.updateBaseUI(true);
@@ -886,7 +882,7 @@
         Settings.setValue(WRAPKEY, currentFileNumber);
 
         var model;
-        print("POLYLINES LENGHTH + " + polylines.length);
+        
         // convert polyline linePoints to vertices
         if (polylines.length >= 1) {
             var meshes = [];
@@ -938,7 +934,7 @@
                     var vertexIndex = i * 2;
                     if (i < linePoints.length - 1) {
                         tangent = Vec3.subtract(linePoints[i + 1], linePoints[i]);
-                        binormal = Vec3.multiply(Vec3.normalize(Vec3.cross(tangent, normals[i])), strokeWidths[i]);
+                        binormal = Vec3.multiply(Vec3.normalize(Vec3.cross(normals[i], tangent)), strokeWidths[i]);
                         if (isNaN(binormal.x)) {
                             continue;
                         }
@@ -989,6 +985,9 @@
                             }
                             increaseValue = increaseValue > 0 ? increaseValue : 1;
                             uCoord += increaseValue;
+                        } else {
+                            // If the stroke width is constant then the textures should keep the aspect ratio along the line
+                            uCoord = ((1.0 / textureAspectRatio) * accumulatedDistance) / strokeWidth;
                         }
                     }
                     
@@ -1010,8 +1009,9 @@
 
                 mtls.push("usemtl polyline"+ polylineIndex);
                 textures.push(polyline.textures);
-                print("Textures to upload: " + polyline.textures);
-
+                if (wantDebug) {
+                    print("Textures to upload: " + polyline.textures);
+                }
                 polylineIndex++;
             });
             // Create Model
@@ -1030,17 +1030,29 @@
                     obj = obj.replace( ("faces::subMeshIndex " +(i*2+1)) , ("faces::subMeshIndex " +(i*2+1) +"\n" + mtls[i]) );
   
                     makeRequest(i, textures[i]);
-    
-                    // mtl += "newmtl polyline"+ i + "\nillum 0\nKd 0.00 0.00 0.00\nKa 0.00 0.00 0.00\nTf 1.00 1.00 1.00\nmap_Kd " + filename+ "/texture"+i+".png" + "\nNi 1.00\n";
-                    mtl += "newmtl polyline"+ i + "\nillum 6\nKd 0.50 0.50 0.50\nKa 0.00 0.00 0.00\nmap_Kd "+ filename+ "/texture"+i+".png" + "\nmap_d " + filename+ "/texture"+i+".png" + "\nNi 1.00\n";
-                    // mtl += "newmtl polyline"+ i + "\nillum 6\nKa 0.00 0.00 0.00" + "\nmap_d " + filename+ "/texture"+i+".png" + "\nNi 1.00\n";
-                
+
+                    // mtl += "newmtl polyline"+ i + 
+                    //     "\nillum 4\nKd 1.00 1.00 1.00\nKa 0.00 0.00 0.00\nTf 1.00 1.00 1.00\nmap_Kd "+ 
+                    //     filename+ "/texture"+i+".png" + 
+                    //     "\nmap_d " + filename + "/texture" + i + ".png" + 
+                    //     "\nNi 1.00\n";
+                    mtl += "newmtl polyline"+ i + 
+                        "\nNs 10.0000\nNi 1.5000\nd 0.5\nTr 0.0000\nTf 1.0000 1.0000 1.0000\nillum 2" +
+                        "\nKa 0.00 0.00 0.00\nKd 0.5880 0.5880 0.5880\nKs 0.0000 0.0000 0.0000" +
+                        "\nKe 0.0000 0.0000 0.0000\nmap_Ka "+ 
+                        filename+ "/texture"+i+".png" + 
+                        "\nmap_Kd " + filename + "/texture" + i + ".png" + 
+                        "\nmap_d " + filename + "/texture" + i + ".png\n";
+
                 }
-                print("Check OBJ file: " + obj);
-                print("Check MTL file: " + mtl);
+                if (wantDebug) {
+                    print("Check OBJ file: " + obj);
+                    print("Check MTL file: " + mtl);
+                }
+                objInfo = obj;
                 Assets.putAsset({
                     data: mtl,
-                    path: "/"+  filename +".mtl"
+                    path: "/"+ filename +".mtl"
                 }, uploadDataCallback);
             } else {
 
@@ -1057,19 +1069,29 @@
 
             
         } else {
-            print("No Polylines Selected.");
+            if (wantDebug) {
+                print("No Polylines Selected.");
+            }
         }
     }
 
     function makeRequest(i, textureURL) {
         var request = new XMLHttpRequest();
         request.onreadystatechange = function() {
-            print(" iteration " + i);
-            print("ready state: ", request.readyState, request.status, request.readyState === request.DONE, request.response);
+            if (wantDebug) {
+                print(" iteration " + i);
+                print("ready state: ", 
+                    request.readyState, 
+                    request.status, 
+                    request.readyState === request.DONE, 
+                    request.response
+                );
+            }
             if (request.readyState === request.DONE && request.status === 200) {
-                print("Got response for high score: "+ request.response.byteLength);
-                print("Got response for high score: "+ JSON.stringify(request.response));
-                
+                if (wantDebug) {
+                    print("Got response byteLength : "+ request.response.byteLength);
+                    print("Got response : "+ JSON.stringify(request.response));
+                }
                 Assets.putAsset({
                     data: request.response,
                     path: "/"+ filename+ "/texture"+i+".png" 
@@ -1080,14 +1102,14 @@
         request.open('GET', textureURL );
         request.timeout = 10000;
         request.send();
-    };
+    }
 
     function uploadDataCallback(url, hash) {
     }
 
     function uploadDataCallbackTextures(url, hash) {
         textureCallbackCount++;
-        if (textureCallbackCount == totalNumberOfTextures) {
+        if (textureCallbackCount === totalNumberOfTextures) {
             Assets.putAsset({
                 data: objInfo,
                 path: "/"+ filename +".obj"
@@ -1101,9 +1123,7 @@
     }
     
     function uploadDataCallbackOBJ(url, hash) {
-        print(" UPLOAD OBJ ");
         if (isPlacingOBJInWorld) {
-            print(" UPLOAD PLACING WORLD ");
             placeOBJInWorld("/"+ filename +".obj");
         }
     }
@@ -1173,7 +1193,6 @@
         // TODO : Deal with events
         switch (event.type) {
             case "removePolyline":
-                print("Delete");
                 var deletedIDs = removeSelectedPolylines();
                 tablet.emitScriptEvent(JSON.stringify({
                     type: "polylinesRemoved",
@@ -1190,19 +1209,19 @@
                 addPolylinesFromSearch();
                 break;
             case "exportobj":
-                print("Export: " + (searchRadius + 0.01) );
                 isPlacingOBJInWorld = false;
                 exportOBJFromPolylines(false);
                 break;
             case "exportplace":
-                print("Export & Place: " + (searchRadius + 0.01) );
                 isPlacingOBJInWorld = true;
                 exportOBJFromPolylines(true);
                 break;
             case "filenameChanged":
                 if (event.value.length >= MIN_FILENAME_LENGTH ){
                     filename = event.value;
-                    print("Changing filename: " + filename);
+                    if (wantDebug) {
+                        print("Changing filename: " + filename);
+                    }
                 }
                 break;
             case "isUsingTextures":
@@ -1215,7 +1234,7 @@
                 clearPolylineList();
                 selectionManager.clearSelections();
                 selectionManager.clearBaseOverlays();
-                polylines = []
+                polylines = [];
                 selectionManager.allEntities = polylines;
                 selectionManager.updateBaseUI(true);
                 sendUpdate();
@@ -1245,7 +1264,9 @@
             try {
                 Script.update.disconnect(handSelection);
             } catch (e) {
-                console.warn('Update could not disconnect handSelection');
+                if (wantDebug) {
+                    print('Update could not disconnect handSelection');
+                }
             }
             // clear UI
             selectionManager.clearSelections();
@@ -1269,7 +1290,9 @@
                 try {
                     Script.update.disconnect(handSelection);
                 } catch (e) {
-                    console.warn('Update could not disconnect handSelection');
+                    if (wantDebug) {
+                        print('Update could not disconnect handSelection');
+                    }
                 }
             }
             tablet.gotoHomeScreen();
@@ -1290,7 +1313,9 @@
                 try {
                     Script.update.disconnect(handSelection);
                 } catch (e) {
-                    console.warn('Update could not disconnect handSelection');
+                    if (wantDebug) {
+                        print('Update could not disconnect handSelection');
+                    }
                 }
             }
         }
@@ -1324,7 +1349,9 @@
                         try {
                             Script.update.disconnect(handSelection);
                         } catch (e) {
-                            console.warn('Update could not disconnect handSelection');
+                            if (wantDebug) {
+                                print('Update could not disconnect handSelection');
+                            }
                         }
                     }
                 } 
@@ -1375,7 +1402,9 @@
         try {
             Script.update.disconnect(handSelection);
         } catch (e) {
-            console.warn('Update could not disconnect handSelection');
+            if (wantDebug) {
+                print('Update could not disconnect handSelection');
+            }
         }
     }
 
